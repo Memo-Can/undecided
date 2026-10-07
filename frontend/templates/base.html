@@ -1,0 +1,23 @@
+{% load static %}<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}kararsızım{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body data-page="{% block page %}{% endblock %}"{% block body_attrs %}{% endblock %}>
+  <header class="topbar">
+    <a class="logo" href="/">kararsızım<span>?</span></a>
+    <nav id="nav" class="nav" aria-label="Hesap"></nav>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <script src="{% static 'js/api.js' %}"></script>
+  <script src="{% static 'js/app.js' %}"></script>
+</body>
+</html>

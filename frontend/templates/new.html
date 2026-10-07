@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Anket oluştur · kararsızım{% endblock %}
+{% block page %}new{% endblock %}
+{% block content %}
+<h1 class="page-title">Neye karar veremiyorsun?</h1>
+<form id="new-form" class="card form" novalidate>
+  <p class="error" data-error="__all__" role="alert"></p>
+  <div class="field">
+    <label for="question">Soru</label>
+    <input id="question" name="question" type="text" maxlength="200" placeholder="Bugün sinemaya mı tiyatroya mı gitsem?" required>
+    <p class="error" data-error="question"></p>
+  </div>
+  <fieldset class="field">
+    <legend>Seçenekler (2-5 arası)</legend>
+    <div id="options"></div>
+    <p class="error" data-error="options"></p>
+    <button id="add-option" class="btn btn-ghost" type="button">+ Seçenek ekle</button>
+  </fieldset>
+  <button class="btn btn-primary" type="submit">Anketi yayınla</button>
+</form>
+{% endblock %}

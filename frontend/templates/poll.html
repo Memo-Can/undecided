@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Anket · kararsızım{% endblock %}
+{% block page %}poll{% endblock %}
+{% block body_attrs %} data-poll-id="{{ poll_id }}"{% endblock %}
+{% block content %}
+<div id="poll" aria-live="polite"></div>
+<p id="poll-error" class="error" role="alert"></p>
+<p class="back"><a href="/">← Tüm anketler</a></p>
+{% endblock %}

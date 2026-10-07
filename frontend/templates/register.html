@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Kayıt · kararsızım{% endblock %}
+{% block page %}register{% endblock %}
+{% block content %}
+<h1 class="page-title">Aramıza katıl</h1>
+<form id="register-form" class="card form" novalidate>
+  <p class="error" data-error="__all__" role="alert"></p>
+  <div class="field">
+    <label for="email">E-posta</label>
+    <input id="email" name="email" type="email" autocomplete="email" required>
+    <p class="error" data-error="email"></p>
+  </div>
+  <div class="field">
+    <label for="username">Kullanıcı adı</label>
+    <input id="username" name="username" type="text" autocomplete="username" minlength="3" maxlength="20" required>
+    <p class="hint">3-20 karakter; harf, rakam ve _ . Anketlerde herkese görünür.</p>
+    <p class="error" data-error="username"></p>
+  </div>
+  <div class="field">
+    <label for="password">Parola</label>
+    <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required>
+    <p class="hint">En az 8 karakter.</p>
+    <p class="error" data-error="password"></p>
+  </div>
+  <button class="btn btn-primary" type="submit">Kayıt ol</button>
+  <p class="hint">Zaten hesabın var mı? <a id="login-link" href="/giris/">Giriş yap</a></p>
+</form>
+{% endblock %}

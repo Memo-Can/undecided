@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Giriş · kararsızım{% endblock %}
+{% block page %}login{% endblock %}
+{% block content %}
+<h1 class="page-title">Giriş yap</h1>
+<form id="login-form" class="card form" novalidate>
+  <p class="error" data-error="__all__" role="alert"></p>
+  <div class="field">
+    <label for="email">E-posta</label>
+    <input id="email" name="email" type="email" autocomplete="email" required>
+    <p class="error" data-error="email"></p>
+  </div>
+  <div class="field">
+    <label for="password">Parola</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <p class="error" data-error="password"></p>
+  </div>
+  <button class="btn btn-primary" type="submit">Giriş yap</button>
+  <p class="hint">Hesabın yok mu? <a id="register-link" href="/kayit/">Kayıt ol</a></p>
+</form>
+{% endblock %}

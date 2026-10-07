@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block page %}home{% endblock %}
+{% block content %}
+<div id="feed" class="feed" aria-live="polite"></div>
+<div id="empty" class="empty" hidden>
+  <p class="empty-title">İlk anketi sen aç!</p>
+  <a class="btn btn-primary" href="/yeni/">Anket oluştur</a>
+</div>
+<p id="feed-error" class="error" role="alert"></p>
+<button id="more" class="btn btn-ghost more" type="button" hidden>Daha fazla yükle</button>
+{% endblock %}

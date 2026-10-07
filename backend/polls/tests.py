@@ -103,3 +103,12 @@ class PollApiTests(TestCase):
         with self.assertNumQueries(4):  # count, polls+authors, options+vote counts, my votes
             r = self.client.get("/api/polls/?voter_key=k")
         self.assertEqual(len(r.json()["results"]), 10)
+
+
+class PageTests(TestCase):
+    def test_pages_render(self):
+        user = User.objects.create_user("ayse_k", "ayse@example.com", "guclu-parola-1")
+        poll = Poll.objects.create(question="x", author=user)
+        for path in ("/", f"/anket/{poll.id}/", "/yeni/", "/giris/", "/kayit/"):
+            self.assertEqual(self.client.get(path).status_code, 200, path)
+        self.assertEqual(self.client.get("/anket/999/").status_code, 404)
