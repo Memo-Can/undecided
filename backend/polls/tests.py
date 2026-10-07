@@ -46,6 +46,17 @@ class PollApiTests(TestCase):
         self.assertEqual([o["text"] for o in p["options"]], ["S0", "S1"])
         self.assertIsNone(p["my_vote"])
 
+    def test_options_keep_creation_order(self):
+        texts = ["Z", "A", "M", "B", "K"]
+        r = self.post("/api/polls/", {"question": "Sıra", "options": texts}, self.auth)
+        pid = r.json()["id"]
+        # vote for the last option so vote counts cannot explain the order
+        self.post(f"/api/polls/{pid}/vote/", {"option_id": r.json()["options"][4]["id"], "voter_key": "k"})
+        for url in (f"/api/polls/{pid}/", "/api/polls/"):
+            data = self.client.get(url).json()
+            poll = data if "options" in data else data["results"][0]
+            self.assertEqual([o["text"] for o in poll["options"]], texts)
+
     def test_detail_and_404(self):
         p = self.make_poll()
         self.assertEqual(self.client.get(f"/api/polls/{p['id']}/").json()["question"], p["question"])

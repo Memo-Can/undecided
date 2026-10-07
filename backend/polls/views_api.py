@@ -20,7 +20,8 @@ def valid_voter_key(value):
 
 
 def poll_queryset():
-    options = Option.objects.annotate(votes_count=Count("votes"))
+    # explicit order_by: Meta.ordering is ignored once the query is grouped by annotate(Count)
+    options = Option.objects.annotate(votes_count=Count("votes")).order_by("position", "id")
     return Poll.objects.select_related("author").prefetch_related(Prefetch("options", queryset=options))
 
 
