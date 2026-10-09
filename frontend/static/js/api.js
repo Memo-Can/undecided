@@ -26,6 +26,8 @@
     const headers = { Accept: "application/json" };
     if (body !== undefined) headers["Content-Type"] = "application/json";
     if (method !== "GET") headers["X-CSRFToken"] = getCookie("csrftoken");
+    // anonymous voter key travels in a header (not the URL) so it stays out of logs and history
+    else headers["X-Voter-Key"] = voterKey();
     try {
       const res = await fetch(path, {
         method,
@@ -45,9 +47,5 @@
     voterKey,
     get: (path) => request("GET", path),
     post: (path, body) => request("POST", path, body || {}),
-    // GET a poll URL with the anonymous voter key so my_vote is filled in
-    withKey(path) {
-      return path + (path.includes("?") ? "&" : "?") + "voter_key=" + encodeURIComponent(voterKey());
-    },
   };
 })();

@@ -1,7 +1,10 @@
+from datetime import timedelta
+
 from django.core.paginator import EmptyPage, Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Prefetch
 from django.http import Http404, JsonResponse
+from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from accounts.views import read_json
@@ -9,6 +12,7 @@ from accounts.views import read_json
 from .models import Option, Poll, Vote
 
 PAGE_SIZE = 10
+MAX_POLLS_PER_HOUR = 10
 
 
 def error(errors, status=400):
@@ -91,7 +95,7 @@ def poll_list(request):
     except EmptyPage:
         return JsonResponse({"results": [], "page": page_number, "has_next": False})
     polls = list(page.object_list)
-    voted = my_votes(request, polls, request.GET.get("voter_key"))
+    voted = my_votes(request, polls, request.headers.get("X-Voter-Key"))
     return JsonResponse({
         "results": [poll_payload(p, voted) for p in polls],
         "page": page.number,
@@ -102,6 +106,9 @@ def poll_list(request):
 def create_poll(request):
     if not request.user.is_authenticated:
         return error({"__all__": ["Anket oluşturmak için giriş yapmalısın."]}, 401)
+    recent = Poll.objects.filter(author=request.user, created_at__gte=timezone.now() - timedelta(hours=1)).count()
+    if recent >= MAX_POLLS_PER_HOUR:
+        return error({"__all__": [f"Saatte en fazla {MAX_POLLS_PER_HOUR} anket açabilirsin. Biraz sonra tekrar dene."]}, 429)
     question, options, errors = validate_new_poll(read_json(request))
     if errors:
         return error(errors)
@@ -117,7 +124,7 @@ def poll_detail(request, poll_id):
         poll = poll_queryset().get(pk=poll_id)
     except Poll.DoesNotExist:
         raise Http404
-    voted = my_votes(request, [poll], request.GET.get("voter_key"))
+    voted = my_votes(request, [poll], request.headers.get("X-Voter-Key"))
     return JsonResponse(poll_payload(poll, voted))
 
 

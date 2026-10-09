@@ -18,8 +18,9 @@ python3 -m venv .venv
 cp backend/.env.example backend/.env   # SECRET_KEY ve DATABASE_URL'i doldur
 cd backend
 ../.venv/bin/python manage.py migrate
+../.venv/bin/python manage.py createcachetable   # giriş hız sınırı tablosu, bir kez
 ../.venv/bin/python manage.py runserver
-../.venv/bin/python manage.py test
+DEBUG=False DATABASE_URL=sqlite:///:memory: ../.venv/bin/python manage.py test
 ```
 
 `DATABASE_URL` boşsa SQLite (`backend/db.sqlite3`) kullanılır. `DEBUG=True` değilse `SECRET_KEY` zorunludur.
@@ -28,7 +29,8 @@ cd backend
 
 1. Supabase'de proje aç: **Project Settings → Database → Connection string → Transaction pooler** (port **6543**).
 2. Bu adresi `backend/.env` içine `DATABASE_URL` olarak yaz (parolayı koda veya sohbete yazma).
-3. Şemayı bir kez uygula: `cd backend && ../.venv/bin/python manage.py migrate`
+3. Şemayı bir kez uygula: `cd backend && ../.venv/bin/python manage.py migrate && ../.venv/bin/python manage.py createcachetable`
+4. Supabase'te tüm `public` tablolarında RLS'i aç (yeni tablo eklenince tekrarla): `ALTER TABLE public.<tablo> ENABLE ROW LEVEL SECURITY;`
 
 ## Vercel'e dağıtım
 
@@ -50,3 +52,9 @@ Vercel, `backend/manage.py` dosyasını bulup Django'yu otomatik algılar, `coll
 5. Canlı URL'de kayıt ol, anket aç ve oy ver.
 
 Üretimde (`DEBUG=False`) çerezler `Secure` işaretlenir ve `X-Forwarded-Proto` başlığına güvenilir.
+
+## Güvenlik notları
+
+- **Admin** üretimde varsayılan kapalıdır; açmak için `ENABLE_ADMIN=True` ver (ve güçlü bir süper kullanıcı parolası kullan).
+- **Alan adı daraltma:** Vercel sistem ortam değişkenleri (`VERCEL_PROJECT_PRODUCTION_URL`, `VERCEL_BRANCH_URL`, `VERCEL_URL`) kodda otomatik izinli hosta eklenir. Doğruladıktan sonra `ALLOWED_HOSTS` değerini `.vercel.app` yerine tam alan adına, `CSRF_TRUSTED_ORIGINS` değerini `https://*.vercel.app` yerine tam `https://` adresine daraltabilirsin.
+- **Giriş hız sınırı** `django_cache` tablosunu kullanır; deploy'dan önce `createcachetable` çalıştırılmış ve RLS açılmış olmalıdır.

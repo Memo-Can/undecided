@@ -15,12 +15,13 @@ Kullanıcıların kararsız kaldıkları konularda anket açtığı, herkesin oy
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # kök requirements.txt -> backend/requirements.txt
 cd backend
 ../.venv/bin/python manage.py migrate
+../.venv/bin/python manage.py createcachetable   # hız sınırı tablosu (django_cache), bir kez
 ../.venv/bin/python manage.py runserver
 ../.venv/bin/python manage.py test
 ```
-**Testleri her zaman SQLite ile çalıştır** (`backend/.env`'deki `DATABASE_URL` Supabase'i gösterir; `manage.py test` onu kullanırsa Supabase'te `test_postgres` veritabanı açar, yavaştır ve geride kalır):
+**Testleri her zaman SQLite ile çalıştır** (`backend/.env`'deki `DATABASE_URL` Supabase'i, `DEBUG=True` ise geliştirme modunu gösterir; testlerde `DEBUG=False` ver; `manage.py test` onu kullanırsa Supabase'te `test_postgres` veritabanı açar, yavaştır ve geride kalır):
 ```bash
-cd backend && DATABASE_URL=sqlite:///:memory: ../.venv/bin/python manage.py test
+cd backend && DEBUG=False DATABASE_URL=sqlite:///:memory: ../.venv/bin/python manage.py test
 ```
 `DATABASE_URL` yoksa SQLite (`backend/db.sqlite3`, gitignore'da) kullanılır. Supabase için `backend/.env.example`'ı `backend/.env` olarak kopyalayıp doldur (pooler, port 6543). `DEBUG=True` değilse `SECRET_KEY` zorunlu (testler hariç).
 
@@ -31,7 +32,7 @@ cd backend && DATABASE_URL=sqlite:///:memory: ../.venv/bin/python manage.py test
 
 ## Kasıtlı kararlar
 - Auth'u Django yapar (session, veritabanında); Supabase yalnızca Postgres'tir. Supabase Auth/JS SDK yok.
-- Anonim oy: istemci `localStorage`'a UUID `voter_key` yazar. IP/parmak izi yok. Anonim `my_vote` için GET isteklerine `?voter_key=` eklenir.
+- Anonim oy: istemci `localStorage`'a UUID `voter_key` yazar. IP/parmak izi yok. GET isteklerinde `voter_key` URL'de değil `X-Voter-Key` başlığında gider (loglara düşmesin); oy POST gövdesinde taşır.
 - Kullanıcı oyunu değiştiremez. Oy sayıları `Vote` tablosundan `Count` ile hesaplanır, sayaç alanı yok.
 - Seçenek sayısı (2–5) model değil view düzeyinde doğrulanır.
 - `annotate(Count)` ile gruplanan sorgularda `Meta.ordering` yok sayılır; sıralama için `.order_by(...)` açıkça yazılmalı (seçenek sırası böyle bozulmuştu, testle sabitli).
@@ -41,5 +42,14 @@ cd backend && DATABASE_URL=sqlite:///:memory: ../.venv/bin/python manage.py test
 
 - Supabase'de tüm `public` tablolarında RLS **açık, politikasız** (Data API/anon anahtarı üzerinden erişimi kapatır; Django `postgres` rolüyle bağlandığı için etkilenmez). Yeni bir migrasyon tablo eklerse o tablo için de `ALTER TABLE public.<tablo> ENABLE ROW LEVEL SECURITY;` çalıştır (Supabase `apply_migration` ile) ve `list_tables` ile doğrula.
 
+## Güvenlik kararları (güvenlik taramasından)
+- Giriş yönlendirmesi (`?next=`) `app.js` içinde `new URL(...)` ile ayrıştırılır, yalnızca aynı origin kabul edilir (`/\evil.com` tuzağı).
+- Giriş: bilinmeyen e-postada da sahte `check_password` çalışır (zamanlama sızıntısı yok). E-posta başına 15 dakikada 5 hatalı deneme sonrası `429` ([accounts/throttle.py](backend/accounts/throttle.py), `django_cache` tablosu; IP tutulmaz). Bilinen ödünleşim: biri kurbanın e-postasıyla 5 kez hata yaparak onu 15 dk kilitleyebilir.
+- Anket oluşturma: kullanıcı başına saatte en fazla 10 (`MAX_POLLS_PER_HOUR`). Kayıt ve oy için hız sınırı **yok** (IP gerektirir; plan IP takibini yasaklıyor), bu Faz 5 / kabul edilmiş risk.
+- CSP: [config/middleware.py](backend/config/middleware.py) tüm sayfa ve API yanıtlarına sıkı bir CSP ekler (`unsafe-inline` yok; yeni inline `<script>`/`style=""` ekleme, Google Fonts dışında harici kaynak ekleme). `/admin/` hariç.
+- Admin yalnızca `DEBUG=True` iken ya da `ENABLE_ADMIN=True` verilirse açılır; üretimde varsayılan kapalı. Üretimde süper kullanıcı açma.
+- Vercel host'ları (`VERCEL_PROJECT_PRODUCTION_URL`, `VERCEL_BRANCH_URL`, `VERCEL_URL`) otomatik `ALLOWED_HOSTS` ve `CSRF_TRUSTED_ORIGINS`'e eklenir; joker `.vercel.app` / `https://*.vercel.app` değerleri Vercel panelinden bu sistem değişkenleri çalıştığı doğrulandıktan sonra daraltılabilir.
+- Yeni tablo gelirse RLS'i aç (`django_cache` için yapıldı). Supabase'te `test_postgres` artığı varsa kullanıcı siler.
+
 ## Durum
-Faz 0–4 hazırlandı. Supabase bağlantısı doğrulandı (migrasyonlar uygulandı, RLS açık). Vercel projesi `undecided` oluşturuldu (kişisel hesap, framework Django; `DEBUG`, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` girildi) ama henüz deploy edilmedi: kullanıcının `SECRET_KEY` ve `DATABASE_URL`'i Vercel panelinden girmesi bekleniyor (gizli değerleri ben girmem). Proje varsayılan olarak Vercel Authentication açık; herkese açık site için Deployment Protection kapatılmalı. Supabase bölgesi ap-south-1 olduğu için işlev bölgesi `bom1` önerilir. GitHub remote tanımlı (`Memo-Can/undecided`), push kullanıcıda. Faz 5 isteğe bağlı, istenmedikçe yapılmaz.
+Faz 0–4 yapıldı ve canlıda (https://undecided-memo-team1.vercel.app, Vercel + Supabase). Güvenlik taraması yapıldı, bulgular düzeltildi (yukarıdaki bölüm); düzeltmelerin canlıya çıkması için commit + push gerekir. Supabase bağlantısı doğrulandı (migrasyonlar uygulandı, RLS açık). Vercel Authentication kapalı (site herkese açık). GitHub remote `Memo-Can/undecided`, commit/push kullanıcıda. Faz 5 isteğe bağlı, istenmedikçe yapılmaz.

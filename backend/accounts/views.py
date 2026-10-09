@@ -2,6 +2,7 @@ import json
 import re
 
 from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
@@ -9,6 +10,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods, require_POST
 
+from . import throttle
 from .models import User
 
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{3,20}$")
@@ -67,15 +69,27 @@ def register(request):
     return JsonResponse({"user": user_payload(user)}, status=201)
 
 
+# computed once; lets us burn the same hashing time when the e-mail is unknown
+DUMMY_HASH = make_password("dummy-password-for-timing")
+
+
 @require_POST
 def login_view(request):
     data = read_json(request)
     email = clean_str(data, "email")
     password = data.get("password") if isinstance(data.get("password"), str) else ""
+    if throttle.is_locked(email):
+        return JsonResponse({"errors": {"__all__": ["Çok fazla hatalı deneme. 15 dakika sonra tekrar dene."]}}, status=429)
     found = User.objects.filter(email__iexact=email).first() if email else None
-    user = authenticate(request, username=found.username, password=password) if found else None
+    if found:
+        user = authenticate(request, username=found.username, password=password)
+    else:
+        check_password(password, DUMMY_HASH)  # same cost as a real check: no timing leak of which e-mails exist
+        user = None
     if user is None:
+        throttle.record_failure(email)
         return JsonResponse({"errors": {"__all__": ["E-posta veya parola hatalı."]}}, status=400)
+    throttle.clear(email)
     login(request, user)
     return JsonResponse({"user": user_payload(user)})
 

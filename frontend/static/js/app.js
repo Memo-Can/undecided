@@ -34,10 +34,14 @@
     return new Date(iso).toLocaleDateString("tr-TR");
   }
 
-  // only same-site paths, to avoid open redirects
+  // only same-origin targets: browsers turn "/\\evil.com" into "//evil.com", so parse instead of prefix-checking
   function safeNext() {
     const next = new URLSearchParams(location.search).get("next") || "";
-    return next.startsWith("/") && !next.startsWith("//") ? next : "/";
+    try {
+      const url = new URL(next, location.origin);
+      if (url.origin === location.origin && url.pathname.startsWith("/")) return url.pathname + url.search + url.hash;
+    } catch (e) { /* malformed target */ }
+    return "/";
   }
 
   let mePromise = null;
@@ -147,7 +151,7 @@
     if (res.ok) return fillPoll(card, res.data, asLink, true);
     if (res.status === 409) {
       // already voted (e.g. in another tab): just show the results
-      const fresh = await api.get(api.withKey("/api/polls/" + poll.id + "/"));
+      const fresh = await api.get("/api/polls/" + poll.id + "/");
       if (fresh.ok) return fillPoll(card, fresh.data, asLink, true);
     }
     message.textContent = firstError(res.data);
@@ -165,7 +169,7 @@
     async function loadNext() {
       more.disabled = true;
       error.textContent = "";
-      const res = await api.get(api.withKey("/api/polls/?page=" + (page + 1)));
+      const res = await api.get("/api/polls/?page=" + (page + 1));
       more.disabled = false;
       if (!res.ok) {
         error.textContent = firstError(res.data);
@@ -184,7 +188,7 @@
   async function initPoll() {
     const id = document.body.dataset.pollId;
     const holder = document.getElementById("poll");
-    const res = await api.get(api.withKey("/api/polls/" + id + "/"));
+    const res = await api.get("/api/polls/" + id + "/");
     if (!res.ok) {
       document.getElementById("poll-error").textContent =
         res.status === 404 ? "Bu anket bulunamadı." : firstError(res.data);

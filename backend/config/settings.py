@@ -37,8 +37,19 @@ if not SECRET_KEY:
         raise RuntimeError("SECRET_KEY ortam değişkeni tanımlı olmalı.")
     SECRET_KEY = "dev-only-insecure-key"
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = [h for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h]
 CSRF_TRUSTED_ORIGINS = [o for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if o]
+
+# Vercel's own hostnames (production alias, branch and deployment URLs). With these the wildcard
+# ".vercel.app" / "https://*.vercel.app" values can be narrowed in the Vercel dashboard.
+for _name in ("VERCEL_PROJECT_PRODUCTION_URL", "VERCEL_BRANCH_URL", "VERCEL_URL"):
+    _host = os.environ.get(_name)
+    if _host:
+        ALLOWED_HOSTS.append(_host)
+        CSRF_TRUSTED_ORIGINS.append("https://" + _host)
+
+# The Django admin is only exposed in development unless ENABLE_ADMIN=True is set.
+ENABLE_ADMIN = (os.environ.get("ENABLE_ADMIN") or str(DEBUG)) == "True"
 
 
 # Application definition
@@ -63,6 +74,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'config.middleware.ContentSecurityPolicyMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -136,6 +148,14 @@ STATICFILES_DIRS = [FRONTEND_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 AUTH_USER_MODEL = 'accounts.User'
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+
+# Login throttle storage; create the table once with `manage.py createcachetable`.
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+        'LOCATION': 'django_cache',
+    }
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

@@ -1,4 +1,7 @@
+from datetime import timedelta
+
 from django.test import Client, TestCase
+from django.utils import timezone
 
 from accounts.models import User
 
@@ -72,7 +75,7 @@ class PollApiTests(TestCase):
         r = self.post(f"/api/polls/{p['id']}/vote/", {"option_id": p["options"][1]["id"], "voter_key": "k1"})
         self.assertEqual(r.status_code, 409)
         self.assertEqual(self.post(f"/api/polls/{p['id']}/vote/", {"option_id": oid, "voter_key": "k2"}).status_code, 201)
-        got = self.client.get(f"/api/polls/{p['id']}/?voter_key=k1").json()
+        got = self.client.get(f"/api/polls/{p['id']}/", HTTP_X_VOTER_KEY="k1").json()
         self.assertEqual((got["total_votes"], got["my_vote"]), (2, oid))
         self.assertIsNone(self.client.get(f"/api/polls/{p['id']}/").json()["my_vote"])
 
@@ -96,7 +99,9 @@ class PollApiTests(TestCase):
 
     def test_list_pagination_order(self):
         for i in range(12):
-            self.make_poll(question=f"Soru {i}")
+            p = self.make_poll(question=f"Soru {i}")
+            # backdate so the hourly creation limit is not hit, keeping the order by age
+            Poll.objects.filter(pk=p["id"]).update(created_at=timezone.now() - timedelta(hours=3) + timedelta(minutes=i))
         r1 = self.client.get("/api/polls/?page=1").json()
         self.assertEqual(len(r1["results"]), 10)
         self.assertTrue(r1["has_next"])
@@ -112,7 +117,7 @@ class PollApiTests(TestCase):
             p = self.make_poll(5, f"Soru {i}")
             self.post(f"/api/polls/{p['id']}/vote/", {"option_id": p["options"][0]["id"], "voter_key": "k"})
         with self.assertNumQueries(4):  # count, polls+authors, options+vote counts, my votes
-            r = self.client.get("/api/polls/?voter_key=k")
+            r = self.client.get("/api/polls/", HTTP_X_VOTER_KEY="k")
         self.assertEqual(len(r.json()["results"]), 10)
 
 
@@ -123,3 +128,38 @@ class PageTests(TestCase):
         for path in ("/", f"/anket/{poll.id}/", "/yeni/", "/giris/", "/kayit/"):
             self.assertEqual(self.client.get(path).status_code, 200, path)
         self.assertEqual(self.client.get("/anket/999/").status_code, 404)
+
+
+class AbuseLimitTests(TestCase):
+    def test_poll_creation_limit_per_hour(self):
+        user = User.objects.create_user("ayse_k", "ayse@example.com", "guclu-parola-1")
+        c = Client()
+        c.force_login(user)
+        body = {"question": "Soru", "options": ["a", "b"]}
+        for _ in range(10):
+            self.assertEqual(c.post("/api/polls/", body, content_type="application/json").status_code, 201)
+        self.assertEqual(c.post("/api/polls/", body, content_type="application/json").status_code, 429)
+        Poll.objects.filter(author=user).update(created_at=timezone.now() - timedelta(hours=2))
+        self.assertEqual(c.post("/api/polls/", body, content_type="application/json").status_code, 201)
+
+    def test_voter_key_is_read_from_header_not_query(self):
+        user = User.objects.create_user("ayse_k", "ayse@example.com", "guclu-parola-1")
+        c = Client()
+        c.force_login(user)
+        p = c.post("/api/polls/", {"question": "x", "options": ["a", "b"]}, content_type="application/json").json()
+        self.client.post(f"/api/polls/{p['id']}/vote/", {"option_id": p["options"][0]["id"], "voter_key": "k1"}, content_type="application/json")
+        url = f"/api/polls/{p['id']}/"
+        self.assertIsNone(self.client.get(url + "?voter_key=k1").json()["my_vote"])
+        self.assertEqual(self.client.get(url, HTTP_X_VOTER_KEY="k1").json()["my_vote"], p["options"][0]["id"])
+
+
+class HardeningTests(TestCase):
+    def test_csp_header_on_pages_and_api(self):
+        for path in ("/", "/giris/", "/api/polls/"):
+            csp = self.client.get(path)["Content-Security-Policy"]
+            self.assertIn("default-src 'self'", csp)
+            self.assertIn("frame-ancestors 'none'", csp)
+            self.assertNotIn("unsafe-inline", csp)
+
+    def test_admin_is_not_mounted_unless_enabled(self):
+        self.assertEqual(self.client.get("/admin/login/").status_code, 404)
